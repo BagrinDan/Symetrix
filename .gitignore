@@ -219,3 +219,9 @@ __marimo__/
 
 
 .venv
+
+plan.txt
+
+models/qwen2.5-7b-instruct
+models/Qwen3-ASR-0.6B-hf
+models/Qwen3-ASR-1.7B-hf
