@@ -1,10 +1,14 @@
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from app.core.controllers import upload_audio
 
+# Настройка логирования
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("abobus")
+logger = logging.getLogger("verdikt")
 
 app = FastAPI(
     title="Test",
