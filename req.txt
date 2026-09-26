@@ -1,3 +1,11 @@
-fastapi 
+fastapi
 uvicorn[standard]
+python-multipart
 jinja2
+pydantic
+httpx
+faster-whisper
+huggingface_hub
+torch 
+transformers
+accelerate

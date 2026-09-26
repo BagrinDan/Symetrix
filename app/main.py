@@ -16,6 +16,10 @@ app = FastAPI(
     description="DeepDeckGigaByte"
 )
 
+# Frontend
+
+# Controllers
+app.include_router(upload_audio.router)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=12000, reload=True)
