@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>MedMeet</title>
+
+    <link rel="stylesheet" href="/static/index.css">
+</head>
+
+<body>
+
+<div class="app">
+
+    <aside>
+
+        <div class="brand">
+
+            <div class="bars">
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
+            </div>
+
+            <div>
+                <b>
+                    Med<span>Meet</span>
+                </b>
+
+                <small id="brandSub">
+                    Meeting assistant for healthcare teams
+                </small>
+            </div>
+
+        </div>
+
+
+        <div class="nav">
+
+            <button
+                    class="active"
+                    data-view="new">
+                ＋ New Meeting
+            </button>
+
+            <button
+                    data-view="meetings">
+                ▣ Meetings
+            </button>
+
+            <button
+                    data-view="settings">
+                ⚙ Settings
+            </button>
+
+        </div>
+
+    </aside>
+
+
+    <main>
+
+        <section
+                id="view-new"
+                class="view active">
+
+            <div class="title">
+
+                <h1>
+                    New Meeting
+                </h1>
+
+                <p>
+                    Upload or record a meeting, then generate structured minutes with decisions and action items.
+                </p>
+
+            </div>
+
+
+            <div class="card">
+
+                <h2>
+                    Meeting details
+                </h2>
+
+
+                <label>
+                    Meeting type
+                </label>
+
+                <select
+                        id="meetingType"
+                        class="wide">
+
+                    <option>
+                        Medical Board
+                    </option>
+
+                    <option>
+                        Executive
+                    </option>
+
+                    <option>
+                        Administrative
+                    </option>
+
+                </select>
+
+
+                <label>
+                    Participants
+                </label>
+
+                <input
+                        id="participantInput"
+                        class="wide"
+                        placeholder="Type a name or email and press Enter">
+
+                <div
+                        id="chips"
+                        class="chips">
+                </div>
+
+
+                <label>
+                    Audio source
+                </label>
+
+                <div
+                        id="drop"
+                        class="drop">
+
+                    <b>
+                        Drop meeting audio here
+                    </b>
+
+                    <span>
+                        M4A, MP3, WAV
+                    </span>
+
+                    <strong id="audioName">
+                        No file selected
+                    </strong>
+
+                </div>
+
+
+                <input
+                        id="fileInput"
+                        type="file"
+                        accept="audio/*"
+                        hidden>
+
+
+                <div class="actions">
+
+                    <button
+                            id="chooseFile"
+                            class="btn soft">
+                        Choose file
+                    </button>
+
+                    <button
+                            id="record"
+                            class="btn soft">
+                        ● Record
+                    </button>
+
+                    <button
+                            id="process"
+                            class="btn primary">
+                        Process meeting
+                    </button>
+
+                </div>
+
+
+                <div
+                        id="recbox"
+                        class="recbox hidden">
+
+                    <div>
+
+                        <b>
+                            Recording
+                        </b>
+
+                        <span id="timer">
+                            00:00
+                        </span>
+
+                    </div>
+
+                    <div>
+
+                        <button
+                                id="stop"
+                                class="btn danger">
+                            Stop
+                        </button>
+
+                        <button
+                                id="discard"
+                                class="btn soft">
+                            Discard
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <div
+                        id="readybox"
+                        class="readybox hidden">
+
+                    <div>
+
+                        <b>
+                            Recording ready
+                        </b>
+
+                        <span id="duration">
+                            00:00
+                        </span>
+
+                    </div>
+
+                    <div>
+
+                        <button
+                                id="previewRec"
+                                class="btn soft">
+                            Preview
+                        </button>
+
+                        <button
+                                id="deleteRec"
+                                class="btn soft">
+                            Delete
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <p class="helper">
+                    Language detection is automatic. Romanian, Russian and English may appear in the same meeting.
+                </p>
+
+            </div>
+
+
+            <div class="card progress">
+
+                <div class="steps">
+
+                    <div class="step done">
+                        <i></i>
+                        <span>
+                            Upload received
+                        </span>
+                    </div>
+
+                    <div class="step">
+                        <i></i>
+                        <span>
+                            Transcribing
+                        </span>
+                    </div>
+
+                    <div class="step">
+                        <i></i>
+                        <span>
+                            Preparing summary
+                        </span>
+                    </div>
+
+                    <div class="step">
+                        <i></i>
+                        <span>
+                            Ready
+                        </span>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div
+                    id="results"
+                    class="card results hidden">
+
+                <div class="resulthead">
+
+                    <div>
+
+                        <h2>
+                            Results
+                        </h2>
+
+                        <p class="helper">
+                            Review the generated meeting minutes before sending them to participants.
+                        </p>
+
+                    </div>
+
+                    <button
+                            id="send"
+                            class="btn soft">
+                        Send to participants
+                    </button>
+
+                </div>
+
+
+                <div class="tabs">
+
+                    <button
+                            class="active"
+                            data-tab="summary">
+                        Summary
+                    </button>
+
+                    <button
+                            data-tab="decisions">
+                        Decisions
+                    </button>
+
+                    <button
+                            data-tab="actions">
+                        Action Items
+                    </button>
+
+                    <button
+                            data-tab="transcript">
+                        Transcript
+                    </button>
+
+                    <button
+                            data-tab="email">
+                        Email Preview
+                    </button>
+
+                </div>
+
+
+                <div
+                        id="panel-summary"
+                        class="panel active summary">
+
+                    <h3>
+                        Meeting Summary
+                    </h3>
+
+                    <p id="summaryText">
+                        No summary generated yet.
+                    </p>
+
+                </div>
+
+
+                <div
+                        id="panel-decisions"
+                        class="panel">
+
+                    <h3>
+                        Meeting Decisions
+                    </h3>
+
+                    <table>
+
+                        <thead>
+
+                        <tr>
+                            <th>#</th>
+                            <th>Decision</th>
+                            <th>Owner</th>
+                            <th>Evidence</th>
+                            <th>Status</th>
+                        </tr>
+
+                        </thead>
+
+                        <tbody id="decisionsBody">
+                        </tbody>
+
+                    </table>
+
+
+                    <div
+                            id="decisionsEmpty"
+                            class="empty">
+
+                        No decisions detected yet.
+
+                    </div>
+
+                </div>
+
+
+                <div
+                        id="panel-actions"
+                        class="panel">
+
+                    <div class="toolbar">
+
+                        <input
+                                id="aSearch"
+                                placeholder="Search action items...">
+
+                        <select id="aFilter">
+
+                            <option value="all">
+                                All priorities
+                            </option>
+
+                            <option value="high">
+                                High priority
+                            </option>
+
+                            <option value="medium">
+                                Medium priority
+                            </option>
+
+                        </select>
+
+                        <select id="aSort">
+
+                            <option value="default">
+                                Default order
+                            </option>
+
+                            <option value="deadline">
+                                Sort by deadline
+                            </option>
+
+                            <option value="owner">
+                                Sort by owner
+                            </option>
+
+                        </select>
+
+                        <button
+                                id="aExport"
+                                class="btn soft">
+                            Export CSV
+                        </button>
+
+                    </div>
+
+
+                    <table>
+
+                        <thead>
+
+                        <tr>
+                            <th>#</th>
+                            <th>Action Item</th>
+                            <th>Owner</th>
+                            <th>Deadline</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Evidence</th>
+                        </tr>
+
+                        </thead>
+
+                        <tbody id="aBody">
+                        </tbody>
+
+                    </table>
+
+
+                    <div
+                            id="aEmpty"
+                            class="empty hidden">
+
+                        No action items detected yet.
+
+                    </div>
+
+                </div>
+
+
+                <div
+                        id="panel-transcript"
+                        class="panel">
+
+                    <div class="toolbar">
+
+                        <input
+                                id="tSearch"
+                                placeholder="Search in transcript...">
+
+                        <select id="speaker">
+
+                            <option value="all">
+                                All speakers
+                            </option>
+
+                        </select>
+
+                        <select id="lang">
+
+                            <option value="all">
+                                All languages
+                            </option>
+
+                            <option value="RO">
+                                Romanian
+                            </option>
+
+                            <option value="EN">
+                                English
+                            </option>
+
+                            <option value="RU">
+                                Russian
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div id="tList">
+                    </div>
+
+
+                    <div
+                            id="tEmpty"
+                            class="empty">
+
+                        No transcript available yet.
+
+                    </div>
+
+                </div>
+
+
+                <div
+                        id="panel-email"
+                        class="panel">
+
+                    <div class="emailgrid">
+
+                        <div class="emailbox">
+
+                            <div class="emailhead">
+
+                                <div>
+
+                                    <h3>
+                                        Email Preview
+                                    </h3>
+
+                                    <p class="helper">
+                                        Review the message before sending it.
+                                    </p>
+
+                                </div>
+
+                                <button
+                                        id="editEmail"
+                                        class="btn soft">
+                                    Edit email
+                                </button>
+
+                            </div>
+
+
+                            <label>
+                                To
+                            </label>
+
+                            <textarea
+                                    id="emailTo"
+                                    rows="2"
+                                    readonly></textarea>
+
+
+                            <label>
+                                Subject
+                            </label>
+
+                            <input
+                                    id="emailSubject"
+                                    value=""
+                                    readonly>
+
+
+                            <label>
+                                Message
+                            </label>
+
+                            <textarea
+                                    id="emailMessage"
+                                    rows="8"
+                                    readonly></textarea>
+
+
+                            <label>
+                                Attachment
+                            </label>
+
+                            <div
+                                    id="emailAttachment"
+                                    class="attachment">
+
+                                No attachment generated yet.
+
+                            </div>
+
+
+                            <div
+                                    id="editActions"
+                                    class="editactions hidden">
+
+                                <button
+                                        id="saveEmail"
+                                        class="btn primary">
+                                    Save changes
+                                </button>
+
+                                <button
+                                        id="cancelEmail"
+                                        class="btn soft">
+                                    Cancel
+                                </button>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="preview">
+
+                            <b>
+                                MedMeet
+                            </b>
+
+                            <p id="p1">
+                                Email preview will appear after processing.
+                            </p>
+
+                            <p id="p2">
+                            </p>
+
+                            <p id="p3">
+                            </p>
+
+                            <div class="attachment">
+                                No attachment generated yet.
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <section
+                id="view-meetings"
+                class="view">
+
+            <div class="title">
+
+                <h1>
+                    Meetings
+                </h1>
+
+                <p>
+                    View and reopen previously processed meetings.
+                </p>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="toolbar">
+
+                    <input
+                            id="mSearch"
+                            placeholder="Search meetings...">
+
+                    <select id="mFilter">
+
+                        <option value="all">
+                            All meeting types
+                        </option>
+
+                        <option>
+                            Medical Board
+                        </option>
+
+                        <option>
+                            Executive
+                        </option>
+
+                        <option>
+                            Administrative
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div id="mList">
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <section
+                id="view-settings"
+                class="view">
+
+            <div class="title">
+
+                <h1>
+                    Settings
+                </h1>
+
+                <p>
+                    Configure interface language and default meeting behavior.
+                </p>
+
+            </div>
+
+
+            <div class="settings">
+
+                <div class="card">
+
+                    <h2>
+                        Language preferences
+                    </h2>
+
+                    <label>
+                        Interface language
+                    </label>
+
+                    <select
+                            id="uiLang"
+                            class="wide">
+
+                        <option value="en">
+                            English
+                        </option>
+
+                        <option value="ro">
+                            Romanian
+                        </option>
+
+                        <option value="ru">
+                            Russian
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div class="card">
+
+                    <h2>
+                        Meeting defaults
+                    </h2>
+
+                    <label>
+                        Default meeting type
+                    </label>
+
+                    <select
+                            id="defaultType"
+                            class="wide">
+
+                        <option>
+                            Medical Board
+                        </option>
+
+                        <option>
+                            Executive
+                        </option>
+
+                        <option>
+                            Administrative
+                        </option>
+
+                        <option>
+                            Ask each time
+                        </option>
+
+                    </select>
+
+
+                    <label>
+
+                        <input
+                                id="autoSummary"
+                                type="checkbox"
+                                checked>
+
+                        Automatically generate summary after transcription
+
+                    </label>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<div
+        id="toast"
+        class="toast hidden">
+</div>
+
+
+<script src="/static/index.js"></script>
+
+</body>
+
+</html>

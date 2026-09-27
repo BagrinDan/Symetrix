@@ -16,6 +16,19 @@ app = FastAPI(
     description="DeepDeckGigaByte"
 )
 
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+@app.get("/")
+async def home():
+    return FileResponse("app/static/index.html")
+
+@app.post("/api/process")
+async def process_meeting(file: UploadFile = File(...)):
+    return {
+        "success": True,
+        "filename": file.filename,
+        "summary": "Meeting processed successfully."
+    }
+
 # Frontend
 
 # Controllers
