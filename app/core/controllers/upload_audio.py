@@ -1,20 +1,21 @@
- 
-from fastapi import APIRouter
- 
-from app.core.service import whisper_service 
+import os
+import shutil
+import uuid
 
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 
-from faster_whisper.audio import decode_audio
+from app.core.service import whisper_service
+
 router = APIRouter(prefix="/api/v1/meetings", tags=["meetings"])
 
 jobs: dict[str, dict] = {}
 
+# Куда сохраняем загруженные файлы (можно переопределить через переменную окружения)
+UPLOAD_DIR = os.environ.get("MEETINGS_UPLOAD_DIR", "app/audio")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-def test_process_upload(job_id: str, audio_path: str) -> None:
-    try:
-        pass
-    except Exception as e:
-        jobs[job_id] = {"status": "error", "detail": str(e)}
+# Разрешённые расширения (то, что реально умеет читать faster_whisper/ffmpeg)
+ALLOWED_EXTENSIONS = {".wav", ".mp3", ".m4a", ".ogg", ".flac", ".webm", ".mp4"}
 
 
 def _process_upload(job_id: str, audio_path: str) -> None:
@@ -29,18 +30,42 @@ def _process_upload(job_id: str, audio_path: str) -> None:
         jobs[job_id] = {"status": "error", "detail": str(e)}
 
 
-if __name__ == "__main__":
-    whisper_service.load_models()
+@router.post("/upload")
+async def upload_audio(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+) -> dict:
+    """
+    Принимает аудиофайл от фронтенда, сохраняет его на диск
+    и запускает транскрибацию в фоне. Сразу возвращает job_id,
+    по которому можно опрашивать статус через /status/{job_id}.
+    """
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Неподдерживаемый формат файла: {ext or 'неизвестно'}",
+        )
 
-    test_job_id = "test-1"
-    
-    _process_upload(test_job_id, "app/audio/Medpark_audio.m4a")
+    job_id = uuid.uuid4().hex
+    audio_path = os.path.join(UPLOAD_DIR, f"{job_id}{ext}")
 
-    if test_job_id in jobs:
-        print(f"Статус: {jobs[test_job_id]['status']}")
-        if jobs[test_job_id]["status"] == "done":
-            print(f"Текст:\n{jobs[test_job_id]['transcript']}")
-        else:
-            print(f"Детали ошибки: {jobs[test_job_id]['detail']}")
-    else:
-        print("Словарь jobs остался пустым. Функция полностью провалилась до блока try/except.")
+    try:
+        with open(audio_path, "wb") as out_file:
+            shutil.copyfileobj(file.file, out_file)
+    finally:
+        await file.close()
+
+    jobs[job_id] = {"status": "processing"}
+    background_tasks.add_task(_process_upload, job_id, audio_path)
+
+    return {"job_id": job_id, "status": "processing"}
+
+
+@router.get("/status/{job_id}")
+async def get_status(job_id: str) -> dict:
+    """Возвращает текущий статус задачи (processing / done / error) и результат, если готов."""
+    job = jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Задача с таким job_id не найдена")
+    return job
