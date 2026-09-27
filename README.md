@@ -11,16 +11,15 @@ Arhitecture:
     Main pipeline:
     - Audio -> VAD -> Whisper -> LLM -> MoM
     
-    Detailed:
-    - TODO
+
     
 
 How to run it:
     Install python env:
     1. pyenv 3.11.10 
     2. python -m venv .venv
-    3. TODO (for linux)
-    4. TODO (for windows)
+    3. Linux: source .venv/bin/activate (или source .venv/bin/activate.fish если используете Fish)
+    4. Windows: .venv\Scripts\activate (для CMD) или .venv\Scripts\Activate.ps1 (для PowerShell)
 
     Install models:
 
@@ -31,4 +30,4 @@ How to run it:
     --local-dir ./models/Qwen2.5-7b-instruct
 
     Run app:
-    - TODO
+    - uvicorn app.main:app --reload --port 12000
