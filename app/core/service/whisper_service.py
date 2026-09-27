@@ -12,7 +12,7 @@ from app.core.dto.transcripted_text import TranscribedChunk
 
 
 
-ALLOWED_LANGUAGES = {"ro"}
+ALLOWED_LANGUAGES = {"ro, ru, en"}
 SAMPLE_RATE = 16_000
 
 # ---------------------------------------------------------------------------
@@ -21,25 +21,34 @@ SAMPLE_RATE = 16_000
 class ModelRegistry:
     processor: Optional[AutoProcessor] = None
     model: Optional[AutoModel] = None
+    device: str = "cpu"
 
 registry = ModelRegistry()
+
+
 def load_models(
     model_path: str = "models/Qwen3-ASR-0.6B-hf",
 ) -> None:
+    registry.device = "cuda" if torch.cuda.is_available() else "cpu"
+    dtype = torch.float16 if registry.device == "cuda" else torch.float32
+
     # 1. Загружаем процессор
     registry.processor = AutoProcessor.from_pretrained(
-        model_path, 
+        model_path,
         local_files_only=True
     )
-    
+
     # 2. Загружаем модель напрямую через ее родной класс, встроенный в transformers
     registry.model = Qwen3ASRForConditionalGeneration.from_pretrained(
         model_path,
-        device_map="auto",
-        dtype=torch.float16,
+        dtype=dtype,
         local_files_only=True
-    )
+    ).to(registry.device)
+
     registry.model.eval()
+
+    print(f"Whisper/ASR модель загружена на: {registry.device}")
+
 
 def unload_models() -> None:
     if registry.model is not None:

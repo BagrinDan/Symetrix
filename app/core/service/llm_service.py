@@ -1,79 +1,116 @@
-
 import json
 import logging
-from llama_cpp import Llama
+import os
+import re
+from typing import Optional
 
-import httpx
+from llama_cpp import Llama
 
 logger = logging.getLogger(__name__)
 
-llm = Llama(model_path="./models/qwen2.5-7b-instruct-q4_k_m.gguf", n_gpu_layers=-1)
+# Путь к модели, скачанной по инструкции из README:
+# hf download bartowski/Qwen2.5-7B-Instruct-GGUF \
+#   --include "Qwen2.5-7B-Instruct-Q4_K_M.gguf" \
+#   --local-dir ./models/Qwen2.5-7b-instruct
+MODEL_PATH = os.environ.get(
+    "MOM_MODEL_PATH",
+    "models/qwen2.5-7b-instruct/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+)
 
-SYSTEM_PROMPT = """Ты помощник, который анализирует транскрипт встречи в больнице Medpark."""
-
-class LLMService:
-    def __init__(
-        self,
-        base_url: str = OLLAMA_URL,
-        model: str = OLLAMA_MODEL,
-        timeout: float = OLLAMA_TIMEOUT,
-    ):
-        self.base_url = base_url
-        self.model = model
-        self.timeout = timeout
-
-    def generate_mom(self, transcript: str) -> dict:
-        raw = self._call_ollama(transcript)
-        mom = self._parse_json(raw)
-
-        if mom is None:
-            logger.warning("Первый ответ LLM не распарсился, повторяю с уточнением")
-            raw = self._call_ollama(transcript, retry=True)
-            mom = self._parse_json(raw)
-
-        if mom is None:
-            raise ValueError(f"LLM не вернула валидный JSON после ретрая: {raw!r}")
-
-        return mom
-
-    def unload_model(self) -> None:
-
-        try:
-            httpx.post(
-                f"{self.base_url}/api/generate",
-                json={"model": self.model, "prompt": "", "keep_alive": 0},
-                timeout=10,
-            )
-        except httpx.HTTPError:
-            logger.warning("Не удалось явно выгрузить модель Ollama (не критично)")
-
-    # -- внутреннее -----------------------------------------------------
-
-    def _call_ollama(self, transcript: str, retry: bool = False) -> str:
-        prompt = f"{SYSTEM_PROMPT}\n\nТранскрипт встречи:\n{transcript}"
-        if retry:
-            prompt += "\n\nВАЖНО: верни ТОЛЬКО валидный JSON, без markdown-разметки и пояснений."
-
-        response = httpx.post(
-            f"{self.base_url}/api/generate",
-            json={
-                "model": self.model,
-                "prompt": prompt,
-                "format": "json",
-                "stream": False,
-                "options": {"temperature": 0.1},
-            },
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()["response"]
-
-    @staticmethod
-    def _parse_json(raw: str) -> dict | None:
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return None
+SYSTEM_PROMPT = (
+    "Ești un asistent care analizează transcrierea unei întâlniri de la spitalul Medpark "
+    "și pregătește procesul-verbal al întâlnirii (Minutes of Meeting).\n"
+    "Răspunde STRICT în format JSON valid, fără marcaj markdown (fără ```), fără explicații "
+    "în afara JSON-ului, în următorul format:\n"
+    "{\n"
+    '  "summary": "un rezumat scurt al întâlnirii, 3-5 propoziții",\n'
+    '  "decisions": [\n'
+    '    {"decision": "textul deciziei", "owner": "cine a luat-o / responsabil", "status": "Confirmed"}\n'
+    "  ],\n"
+    '  "action_items": [\n'
+    '    {"task": "ce trebuie făcut", "owner": "responsabil", "deadline": "termenul limită, dacă este menționat", '
+    '"priority": "high sau medium", "status": "Not started"}\n'
+    "  ]\n"
+    "}\n"
+    "Dacă ceva nu poate fi determinat cu certitudine din transcriere (de exemplu, responsabilul sau termenul limită) — "
+    "pune un șir gol \"\". Dacă nu au existat decizii sau sarcini — returnează liste goale."
+)
 
 
-llm_service = LLMService()
+class ModelRegistry:
+    llm: Optional[Llama] = None
+
+
+registry = ModelRegistry()
+
+
+def load_model(model_path: str = MODEL_PATH, n_ctx: int = 8192) -> None:
+    logger.info("Загружаю LLM для генерации MoM: %s", model_path)
+    registry.llm = Llama(
+        model_path=model_path,
+        n_ctx=n_ctx,
+        n_gpu_layers=-1,
+        verbose=False,
+    )
+
+
+def unload_model() -> None:
+    registry.llm = None
+
+
+def generate_mom(transcript: str) -> dict:
+    """
+    Принимает сырой транскрипт (текст от ASR) и возвращает словарь:
+    {"summary": str, "decisions": [...], "action_items": [...]}
+    """
+    if registry.llm is None:
+        raise RuntimeError("LLM не загружена — вызовите load_model() сначала")
+
+    if not transcript.strip():
+        return {"summary": "", "decisions": [], "action_items": []}
+
+    raw = _call_llm(transcript)
+    mom = _parse_json(raw)
+
+    if mom is None:
+        logger.warning("Первый ответ LLM не распарсился, повторяю с уточнением")
+        raw = _call_llm(transcript, retry=True)
+        mom = _parse_json(raw)
+
+    if mom is None:
+        raise ValueError(f"LLM не вернула валидный JSON после ретрая: {raw!r}")
+
+    return {
+        "summary": mom.get("summary") or "",
+        "decisions": mom.get("decisions") or [],
+        "action_items": mom.get("action_items") or [],
+    }
+
+
+def _call_llm(transcript: str, retry: bool = False) -> str:
+    user_prompt = f"Транскрипт встречи:\n{transcript}"
+    if retry:
+        user_prompt += "\n\nВАЖНО: верни ТОЛЬКО валидный JSON, без markdown и пояснений."
+
+    response = registry.llm.create_chat_completion(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0.1,
+    )
+    return response["choices"][0]["message"]["content"]
+
+
+def _parse_json(raw: str) -> Optional[dict]:
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # На случай если модель всё же обернула JSON в ```json ... ``` или добавила текст вокруг
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                return None
+        return None

@@ -1,4 +1,5 @@
 let actions = [];
+let decisions = [];
 let transcript = [];
 let meetings = [];
 
@@ -261,6 +262,8 @@ function setSummary(text) {
 function clearDemoContent() {
     actions = [];
 
+    decisions = [];
+
     transcript = [];
 
     meetings = [];
@@ -326,9 +329,51 @@ function clearDemoContent() {
 
     renderActions();
 
+    renderDecisions();
+
     renderTranscript();
 
     renderMeetings();
+}
+
+
+// Задержка между опросами статуса задачи
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+
+// Опрашиваем /api/v1/meetings/status/{job_id}, пока задача не завершится
+async function pollJobStatus(jobId, { intervalMs = 1500, timeoutMs = 10 * 60 * 1000, onUpdate } = {}) {
+    const startedAt = Date.now();
+
+    while (true) {
+        const response = await fetch(`/api/v1/meetings/status/${jobId}`);
+
+        if (!response.ok) {
+            throw new Error("Status check failed");
+        }
+
+        const job = await response.json();
+
+        if (onUpdate) {
+            onUpdate(job);
+        }
+
+        if (job.status === "done") {
+            return job;
+        }
+
+        if (job.status === "error") {
+            throw new Error(job.detail || "Processing error");
+        }
+
+        if (Date.now() - startedAt > timeoutMs) {
+            throw new Error("Processing timed out");
+        }
+
+        await sleep(intervalMs);
+    }
 }
 
 
@@ -357,30 +402,70 @@ qs("#process").onclick = async () => {
             file
         );
 
+        // Шаг 2: загрузка файла на бэкенд
         if (steps[1]) {
             steps[1].classList.add(
                 "current"
             );
         }
 
-        const response =
+        const uploadResponse =
             await fetch(
-                "/api/process",
+                "/api/v1/meetings/upload",
                 {
                     method: "POST",
                     body: formData
                 }
             );
 
-        if (!response.ok) {
+        if (!uploadResponse.ok) {
+            const errorBody =
+                await uploadResponse.json().catch(() => null);
+
             throw new Error(
-                "Processing failed"
+                errorBody?.detail || "Upload failed"
             );
         }
 
-        const data =
-            await response.json();
+        const { job_id: jobId } =
+            await uploadResponse.json();
 
+        // Шаг 2 → 3: файл загружен, теперь реально идёт транскрибация.
+        // Раньше "Transcribing" помечался done сразу после аплоада — это было
+        // неверно и создавало впечатление, что дальше всё зависло.
+        if (steps[1]) {
+            steps[1].classList.add(
+                "current"
+            );
+        }
+
+        const job = await pollJobStatus(jobId, {
+            onUpdate: statusUpdate => {
+                // Если бэкенд сообщил, что перешёл к генерации summary (LLM) —
+                // двигаем подсветку на "Preparing summary" по-настоящему,
+                // а не по фейковому таймеру.
+                if (
+                    statusUpdate.stage === "summarizing" &&
+                    steps[1] &&
+                    steps[2]
+                ) {
+                    steps[1].classList.remove(
+                        "current"
+                    );
+
+                    steps[1].classList.add(
+                        "done"
+                    );
+
+                    steps[2].classList.add(
+                        "current"
+                    );
+                }
+            }
+        });
+
+        // Подстраховка: если бэкенд не прислал промежуточный stage
+        // (например, LLM-шаг ещё не подключён), всё равно домечаем шаги как done.
         if (steps[1]) {
             steps[1].classList.remove(
                 "current"
@@ -391,70 +476,68 @@ qs("#process").onclick = async () => {
             );
         }
 
-        for (
-            let i = 2;
-            i < steps.length;
-            i++
-        ) {
-            steps[i].classList.add(
+        if (steps[2]) {
+            steps[2].classList.remove(
                 "current"
             );
 
-            await new Promise(
-                resolve =>
-                    setTimeout(
-                        resolve,
-                        600
-                    )
+            steps[2].classList.add(
+                "done"
             );
+        }
 
-            steps[i].classList.remove(
+        // Шаг 4: результат готов
+        if (steps[3]) {
+            steps[3].classList.add(
                 "current"
             );
 
-            steps[i].classList.add(
+            await sleep(300);
+
+            steps[3].classList.remove(
+                "current"
+            );
+
+            steps[3].classList.add(
                 "done"
             );
         }
 
         setSummary(
-            data.summary
+            job.summary ||
+            "No summary generated yet."
         );
 
-        if (
-            Array.isArray(
-                data.actions
-            )
-        ) {
-            actions =
-                data.actions;
-        }
+        decisions =
+            Array.isArray(job.decisions)
+                ? job.decisions
+                : [];
 
-        if (
-            Array.isArray(
-                data.transcript
-            )
-        ) {
-            transcript =
-                data.transcript;
-        }
+        actions =
+            Array.isArray(job.actions)
+                ? job.actions
+                : [];
 
-        if (
-            Array.isArray(
-                data.meetings
-            )
-        ) {
-            meetings =
-                data.meetings;
-        }
+        transcript =
+            Array.isArray(job.segments)
+                ? job.segments
+                : [];
 
         updateSpeakers();
 
         renderActions();
 
+        renderDecisions();
+
         renderTranscript();
 
         renderMeetings();
+
+        if (job.mom_error) {
+            toast(
+                "Transcript ready, but summary generation failed"
+            );
+        }
 
         qs("#results")
             .classList
@@ -473,10 +556,42 @@ qs("#process").onclick = async () => {
         console.error(error);
 
         toast(
-            "Processing error"
+            error.message || "Processing error"
         );
     }
 };
+
+
+// Decisions
+function renderDecisions() {
+    const decisionsBody =
+        qs("#decisionsBody") ||
+        qs("#panel-decisions tbody");
+
+    if (!decisionsBody) {
+        return;
+    }
+
+    decisionsBody.innerHTML =
+        decisions.map((item, index) => `
+            <tr>
+                <td>${item.id ?? index + 1}</td>
+                <td>${item.decision ?? ""}</td>
+                <td>${item.owner ?? ""}</td>
+                <td>${item.evidence ?? ""}</td>
+                <td>${item.status ?? ""}</td>
+            </tr>
+        `).join("");
+
+    const decisionsEmpty = qs("#decisionsEmpty");
+
+    if (decisionsEmpty) {
+        decisionsEmpty.classList.toggle(
+            "hidden",
+            decisions.length > 0
+        );
+    }
+}
 
 
 // Action Items
